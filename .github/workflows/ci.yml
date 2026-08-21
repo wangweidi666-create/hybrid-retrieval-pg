@@ -1,0 +1,66 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ".[dev]"
+      - run: ruff check src tests
+      - run: pytest tests -q
+
+  benchmark:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - name: Compare retrieval configurations
+        run: |
+          python -m hybridsearch benchmark examples/corpus.jsonl examples/queries.jsonl -k 5 \
+            | tee -a "$GITHUB_STEP_SUMMARY"
+
+  postgres:
+    runs-on: ubuntu-latest
+    needs: test
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: hybrid
+          POSTGRES_PASSWORD: hybrid
+          POSTGRES_DB: hybrid
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U hybrid -d hybrid"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[postgres]"
+      - name: Apply schema
+        env:
+          PGPASSWORD: hybrid
+        run: psql -h localhost -U hybrid -d hybrid -f sql/schema.sql
+      - name: Index and search against real Postgres
+        env:
+          HYBRID_DSN: postgresql://hybrid:hybrid@localhost:5432/hybrid
+        run: |
+          python -m hybridsearch index examples/corpus.jsonl --dsn "$HYBRID_DSN"
+          python -m hybridsearch search "who pays if the appeal is dropped"
