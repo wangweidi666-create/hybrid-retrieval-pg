@@ -51,7 +51,7 @@ class EmbeddingReranker:
         query_vector, doc_vectors = vectors[0], vectors[1:]
         scored = [
             FusedHit(h.doc_id, cosine_similarity(query_vector, v), h.ranks, h.text, h.metadata)
-            for h, v in zip(hits, doc_vectors)
+            for h, v in zip(hits, doc_vectors, strict=True)
         ]
         scored.sort(key=lambda h: (-h.score, h.doc_id))
         return scored[:top_k]
@@ -90,6 +90,12 @@ class CrossEncoderReranker:
         for row in body["results"][:top_k]:
             hit = hits[row["index"]]
             out.append(
-                FusedHit(hit.doc_id, float(row["relevance_score"]), hit.ranks, hit.text, hit.metadata)
+                FusedHit(
+                    hit.doc_id,
+                    float(row["relevance_score"]),
+                    hit.ranks,
+                    hit.text,
+                    hit.metadata,
+                )
             )
         return out

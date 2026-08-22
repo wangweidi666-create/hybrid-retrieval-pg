@@ -53,7 +53,7 @@ class InMemoryStore:
         if not documents:
             return 0
         vectors = self.embedder.embed([d.text for d in documents])
-        for document, vector in zip(documents, vectors):
+        for document, vector in zip(documents, vectors, strict=True):
             self._docs[document.doc_id] = document
             self._tokens[document.doc_id] = _WORD.findall(document.text.lower())
             self._vectors[document.doc_id] = vector
@@ -89,7 +89,9 @@ class InMemoryStore:
                 denominator = tf + self.k1 * (1 - self.b + self.b * length / avg_length)
                 score += self._idf(term) * (tf * (self.k1 + 1)) / denominator
             if score > 0:
-                scored.append(Hit(doc_id, score, self._docs[doc_id].text, self._docs[doc_id].metadata))
+                scored.append(
+                    Hit(doc_id, score, self._docs[doc_id].text, self._docs[doc_id].metadata)
+                )
         scored.sort(key=lambda h: (-h.score, h.doc_id))
         return scored[:limit]
 
@@ -140,8 +142,13 @@ class PgVectorStore:
 
         vectors = self.embedder.embed([d.text for d in documents])
         rows = [
-            (d.doc_id, d.text, _json.dumps(d.metadata), "[" + ",".join(f"{v:.8f}" for v in vec) + "]")
-            for d, vec in zip(documents, vectors)
+            (
+                d.doc_id,
+                d.text,
+                _json.dumps(d.metadata),
+                "[" + ",".join(f"{v:.8f}" for v in vec) + "]",
+            )
+            for d, vec in zip(documents, vectors, strict=True)
         ]
         with self._connect() as connection, connection.cursor() as cursor:
             cursor.executemany(

@@ -6,7 +6,8 @@ from hybridsearch.types import FusedHit
 
 def test_hybrid_retrieval_finds_the_expected_passage(store):
     retriever = HybridRetriever(store=store, top_k=3)
-    assert "doc-455" in [h.doc_id for h in retriever.retrieve("who pays the court fees on withdrawal")]
+    hits = retriever.retrieve("who pays the court fees on withdrawal")
+    assert "doc-455" in [h.doc_id for h in hits]
 
 
 def test_top_k_bounds_the_result_list(store):
@@ -67,7 +68,7 @@ class TestRerankers:
     def test_embedding_reranker_promotes_the_relevant_passage(self):
         hits = [
             FusedHit("irrelevant", 0.9, text="Espresso machines require descaling every month."),
-            FusedHit("relevant", 0.1, text="An appeal must be filed within sixty days of notification."),
+            FusedHit("relevant", 0.1, text="An appeal must be filed within sixty days."),
         ]
         reranked = EmbeddingReranker().rerank("when must an appeal be filed", hits, 2)
         assert reranked[0].doc_id == "relevant"
